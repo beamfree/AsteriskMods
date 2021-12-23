@@ -1,8 +1,65 @@
 const AmiClient = require('asterisk-ami-client');
 let client = new AmiClient();
  
-var CurrentCalls = [];
-  
+var ActiveCalls = [];
+
+function AnalCall(Call) {
+	var _Index = 0;
+	while(_Index < Call.length) {
+		console.log(Call[_Index].Event);
+		switch (Call[_Index].Event) {
+
+			case "DialBegin" :
+				console.log("Набор номера от: " + Call[_Index].CallerIDNum);
+
+				break;
+			case "Newstate" :
+				switch (Call[_Index].Debug.ChannelStateDesc) {
+					case "Ringing":
+						console.log("Начало звонка: " + Call[_Index].CallerIDNum + ">" + Call[_Index].ConnectedLineNum);
+						break;
+				}
+
+				break;
+			case "BridgeEnter" :
+				console.log("Ответил на звокнок: " + Call[_Index].CallerIDNum + ">" + Call[_Index].ConnectedLineNum);
+				_Index++;
+				break;
+			case "BridgeLeave" :
+				console.log("Звонок завершил: " + Call[_Index].CallerIDNum + ">" + Call[_Index].ConnectedLineNum);
+				_Index++;
+				break;
+		}
+		_Index++;
+	}
+
+}
+
+function AddEvent(Event) {
+	if(!ActiveCalls.hasOwnProperty(Event.Linkedid)) {	ActiveCalls[Event.Linkedid] = []; } else {
+		var _Index = ActiveCalls[Event.Linkedid].length;
+		var _CallEvents = [];
+		_CallEvents['Event'] = Event.Event;
+		_CallEvents['Channel'] = Event.Channel;
+		_CallEvents['ChannelState'] = Event.ChannelStateDesc;
+		_CallEvents['CallerIDNum'] = Event.CallerIDNum;
+		_CallEvents['CallerIDName'] = Event.CallerIDName;
+		_CallEvents['ConnectedLineNum'] = Event.ConnectedLineNum;
+		_CallEvents['ConnectedLineName'] = Event.ConnectedLineName;
+		_CallEvents['DateTime'] = new Date();
+		_CallEvents['Debug'] = Event;
+		ActiveCalls[Event.Linkedid][_Index] = _CallEvents;
+		if(Event.Event == "Hangup") {
+			if(Event.Uniqueid == Event.Linkedid) {
+				AnalCall(ActiveCalls[Event.Linkedid]);
+			}
+		 }
+
+
+	}
+
+}
+
 client.connect('zabbix', 'Sogaz-med56', {host: 'localhost', port: 5038})
  .then(amiConnection => { 
      client
@@ -18,39 +75,21 @@ client.connect('zabbix', 'Sogaz-med56', {host: 'localhost', port: 5038})
 				case "PeerStatus":
 					//console.log(event)
 				break;
-				case "Newstate":
-			    CurrentCalls[event.Linkedid] = [];
-				CurrentCalls[event.Linkedid]['debug'] = event;
-				
-					//console.log(event)
-				break;
-				case "Hangup":
-				
-					//console.log(event);
-				break;
-				
-				case "DialBegin":
-					//console.log("Начало соединения: Вызывающий " + event.CallerIDNum + " на номер " + event.DestCallerIDNum);
-					// ChannelStateDesc
-					// Uniqueid: '1638281572.6',
-					//Linkedid: '1638281572.6',
-					// ChannelStateDesc:
-					//DestChannelStateDesc:
-				break;
-				
-				case "DialState":
-					//console.log("Звонок: Вызывающий " + event.CallerIDNum + "(" + event.CallerIDName+ ")" + " на абонентка " + event.DestCallerIDNum + "(" + event.DestCallerIDName+ ")");
-				break;
-
-				case "DialEnd":
-					//console.log(event);
-				break;
+				case "Newstate": AddEvent(event); break;
+				case "DialBegin": AddEvent(event); break;
+				case "DialEnd":AddEvent(event); break;
+				case "DialState":AddEvent(event); break;
+				case "BridgeEnter":AddEvent(event); break;
+				case "BridgeLeave":AddEvent(event); break;
+				case "Hangup": AddEvent(event);   break;
 
 				
 	 }
-			 console.log(event);
+
      // console.log(CurrentCalls);
-         //console.log(event.Event);
+			 if(event.Event == "Newstate" ) {
+			///	console.log(event);
+			 }
          })
 
          //.on('data', chunk => console.log(chunk))
